@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel Chat Web</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body, html { width:100%; height:100%; font-family: 'Inter', sans-serif; }
+
+  /* Login Page */
+  #loginPage {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background: url('https://images.unsplash.com/photo-1612831664174-c3f16ab2b9c1?auto=format&fit=crop&w=1470&q=80') no-repeat center center fixed;
+    background-size: cover;
+  }
+  #loginPage::before {
+    content:"";
+    position:absolute; width:100%; height:100%;
+    background:rgba(0,0,0,0.4);
+    backdrop-filter: blur(6px);
+    z-index:0;
+  }
+  .login-container {
+    position: relative;
+    z-index:1;
+    background: rgba(7,94,84,0.9);
+    padding: 40px 30px;
+    border-radius: 20px;
+    width: 350px;
+    text-align:center;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    color:white;
+  }
+  .login-container h1 { margin-bottom: 30px; font-weight:600; color:#fff; }
+  .login-container input[type="password"] {
+    width:100%; padding:12px 15px; margin-bottom:20px;
+    border:none; border-radius:10px;
+    outline:none; font-size:1em;
+    background: rgba(255,255,255,0.15); color:white;
+    backdrop-filter: blur(4px);
+  }
+  .login-container input[type="password"]::placeholder { color: rgba(255,255,255,0.7); }
+  .login-container button {
+    width:100%; padding:12px; border:none; border-radius:10px;
+    background:#075e54;
+    color:white; font-size:1em; font-weight:600; cursor:pointer; transition:0.3s;
+  }
+  .login-container button:hover { background:#064e46; }
+  .error { color:#ff6b6b; margin-bottom: 15px; display:none; font-weight:500; }
+
+  /* Admin Panel */
+  #adminPanel { display:none; padding-bottom:50px; background:#f0f2f5; min-height:100vh; }
+  header { background:#075e54; color:white; padding:15px; display:flex; justify-content:space-between; align-items:center; font-size:1.2em; }
+  .container { max-width:1200px; margin:20px auto; background:white; padding:20px; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.1); }
+  h2 { margin-top:0; color:#075e54; }
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  th, td { padding:12px; text-align:left; border-bottom:1px solid #eee; vertical-align:middle; }
+  th { color:#333; font-weight:600; }
+  button.admin-btn { padding:6px 12px; border:none; border-radius:5px; cursor:pointer; font-weight:500; margin-right:5px; }
+  .approve { background:#4CAF50; color:white; }
+  .reject { background:#f44336; color:white; }
+  .delete { background:#555; color:white; }
+  .logout { background:#075e54; color:white; }
+  .deleteAll { background:#f44336; color:white; margin-bottom:15px; }
+  img.avatar { width:40px; height:40px; border-radius:50%; margin-right:10px; vertical-align:middle; }
+  .action-container { display:flex; align-items:center; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN PAGE -->
+<div id="loginPage">
+  <div class="login-container">
+    <h1>Admin Login</h1>
+    <div class="error" id="errorMsg">Password salah!</div>
+    <input type="password" id="adminPassword" placeholder="Masukkan password">
+    <button id="loginBtn">Login</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel">
+  <header>
+    <span>Admin Panel</span>
+    <button id="logoutBtn" class="logout">Logout</button>
+  </header>
+
+  <div class="container">
+    <h2>Pending Users</h2>
+    <table id="pendingUsersTable">
+      <tr><th>Nama User</th><th>Aksi</th></tr>
+    </table>
+
+    <h2>Tikum chat khusus</h2>
+    <table id="onlineUsersTable">
+      <tr><th>Nama User</th><th>Avatar</th><th>Aksi</th></tr>
+    </table>
+
+    <h2>Chat Messages</h2>
+    <button id="deleteAllChatsBtn" class="admin-btn deleteAll">Hapus Semua Chat</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDLzlLQI8d7aR6jt5kFqQxk8-Tt_ETInEI",
+  authDomain: "chatweb-b3049.firebaseapp.com",
+  databaseURL: "https://chatweb-b3049-default-rtdb.firebaseio.com",
+  projectId: "chatweb-b3049",
+  storageBucket: "chatweb-b3049.firebasestorage.app",
+  messagingSenderId: "642647308331",
+  appId: "1:642647308331:web:b44dad2628af9b1a5fd26e",
+  measurementId: "G-R1GTV6M3DN"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Elements
+const loginPage = document.getElementById("loginPage");
+const adminPanel = document.getElementById("adminPanel");
+const loginBtn = document.getElementById("loginBtn");
+const passwordInput = document.getElementById("adminPassword");
+const errorMsg = document.getElementById("errorMsg");
+const logoutBtn = document.getElementById("logoutBtn");
+const deleteAllChatsBtn = document.getElementById("deleteAllChatsBtn");
+
+const ADMIN_PASSWORD = "admin111";
+
+// Login
+loginBtn.onclick = ()=>{
+  if(passwordInput.value === ADMIN_PASSWORD){
+    loginPage.style.display = "none";
+    adminPanel.style.display = "block";
+    initAdminPanel();
+  } else {
+    errorMsg.style.display = "block";
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
+}
+
+passwordInput.addEventListener("keypress", e=>{
+  if(e.key==="Enter") loginBtn.click();
+});
+
+// Logout
+logoutBtn.onclick = ()=>{
+  adminPanel.style.display = "none";
+  loginPage.style.display = "flex";
+  passwordInput.value = "";
+  errorMsg.style.display = "none";
+  passwordInput.focus();
+}
+
+// Initialize Admin Panel
+function initAdminPanel(){
+  const pendingTable = document.getElementById("pendingUsersTable");
+  const onlineTable = document.getElementById("onlineUsersTable");
+
+  // Render Pending Users
+  function renderPendingUsers(){
+    onValue(ref(db,"pendingUsers"), snapshot=>{
+      const data = snapshot.val() || {};
+      pendingTable.innerHTML = "<tr><th>Nama User</th><th>Aksi</th></tr>";
+      Object.keys(data).forEach(u=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="action-container">
+            <img class="avatar" src="${data[u].avatar || 'https://i.pravatar.cc/40'}">
+            ${data[u].name}
+          </td>
+          <td>
+            <button class="admin-btn approve">Approve</button>
+            <button class="admin-btn reject">Reject</button>
+          </td>
+        `;
+        tr.querySelector(".approve").onclick = ()=>{
+          set(ref(db,"onlineUsers/"+u), {name:data[u].name, avatar:data[u].avatar});
+          remove(ref(db,"pendingUsers/"+u));
+          alert(`${data[u].name} berhasil di-approve!`);
+        }
+        tr.querySelector(".reject").onclick = ()=>{
+          remove(ref(db,"pendingUsers/"+u));
+          alert(`${data[u].name} berhasil di-reject!`);
+        }
+        pendingTable.appendChild(tr);
+      });
+    });
+  }
+
+  // Render Online Users
+  function renderOnlineUsers(){
+    onValue(ref(db,"onlineUsers"), snapshot=>{
+      const data = snapshot.val() || {};
+      onlineTable.innerHTML = "<tr><th>Nama User</th><th>Avatar</th><th>Aksi</th></tr>";
+      Object.keys(data).forEach(u=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${data[u].name}</td>
+          <td><img class="avatar" src="${data[u].avatar || 'https://i.pravatar.cc/40'}"></td>
+          <td><button class="admin-btn delete">Hapus</button></td>
+        `;
+        tr.querySelector(".delete").onclick = ()=> {
+          remove(ref(db,"onlineUsers/"+u));
+          alert(`${data[u].name} dihapus dari online users!`);
+        };
+        onlineTable.appendChild(tr);
+      });
+    });
+  }
+
+  // Hapus Semua Chat
+  deleteAllChatsBtn.onclick = ()=>{
+    if(confirm("Apakah yakin ingin menghapus semua chat?")){
+      remove(ref(db,"messages"))
+        .then(()=> alert("Semua chat berhasil dihapus!"))
+        .catch(err=> alert("Gagal menghapus chat: " + err));
+    }
+  }
+
+  renderPendingUsers();
+  renderOnlineUsers();
+}
+</script>
+</body>
+</html>
